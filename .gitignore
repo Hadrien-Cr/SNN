@@ -1,0 +1,7 @@
+# ignore the dataset
+DVS128Gesture/
+# ignore the tensorboard logs for snn_no_delays
+logs
+
+# ignore the model files
+*.pt
