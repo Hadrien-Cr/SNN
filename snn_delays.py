@@ -1,203 +1,243 @@
 
 from spikingjelly.activation_based import neuron, layer
 from spikingjelly.activation_based import functional
-from model import Model
-from DCLS.construct.modules import  Dcls3_1d
+from DCLS.construct.modules import  Dcls3_1d, Dcls1d
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
-class SnnDelays(Model):
-    def __init__(self, config):
-        super().__init__(config)
 
+class Dcls3_1d_SJ(Dcls3_1d):
+    def __init__(
+        self,
+        in_channels,
+        out_channels,
+        kernel_count,
+        learn_delay=True,
+        stride=1,
+        spatial_padding=0,
+        dense_kernel_size=1,
+        dilated_kernel_size=1,
+        groups=1,
+        bias=True,
+        padding_mode='zeros',
+        version='gauss',
+    ):
+        super().__init__(
+            in_channels,
+            out_channels,
+            kernel_count,
+            (*stride, 1),
+            (*spatial_padding, 0),
+            dense_kernel_size,
+            dilated_kernel_size,
+            groups,
+            bias,
+            padding_mode,  
+            version,
+        )
+
+        self.learn_delay = learn_delay
+
+        torch.nn.init.constant_(self.P, (self.dilated_kernel_size[0] // 2)-0.01)
+
+        if not self.learn_delay:
+            self.P.requires_grad = False
+
+        if self.version == 'gauss':
+            self.SIG.requires_grad = False
+            self.sig_init = self.dilated_kernel_size[0]/2
+            torch.nn.init.constant_(self.SIG, self.sig_init)
+
+    def decrease_sig(self, epoch, epochs):
+        if self.version == 'gauss':
+            final_epoch = (1*epochs)//4
+            final_sig = 0.23
+            sig = self.SIG[0, 0, 0, 0, 0, 0].detach().cpu().item()
+            alpha = (final_sig/self.sig_init)**(1/final_epoch)
+            if epoch < final_epoch and sig > final_sig:
+                self.SIG *= alpha
+
+    def forward(self, x):
+        x = x.permute(0, 2, 3, 4, 1) # [N, T, C, H, W] -> [N, C, H, W, T]
+        x = F.pad(x, (self.dilated_kernel_size[0]-1, 0), mode='constant', value=0)
+        x = super().forward(x)
+        x = x.permute(0, 4, 1, 2, 3) # [N, C, H, W, T] -> [N, T, C, H, W]
+        return x
+    
+
+class Net(nn.Module):
+    def __init__(self, config):
+        super().__init__()
         self.config = config
 
-    # Try factoring this method
-    # Check ThresholdDependent batchnorm (in spikingjelly)
-    def build_model(self):
-
-        ########################### Model Description :
-        #
-        #  self.blocks = (n_layers,  0:weights+bn  |  1: lif+dropout+(synapseFilter) ,  element in sub-block)
-        #
-
-
-        ################################################   First Layer    #######################################################
+        ############# Model Description #############
+        # a:  DCLS_Block (repeated n_hidden_layers times)
+        # b: Fully Connected Block (without learning delays, using Flatten and layer.Linear)
+        # c: Voting Layer
         
-        self.blocks = [[[Dcls3_1d(in_channels = self.config.n_inputs, out_channels = self.config.n_hidden_neurons,
-                                   kernel_count=self.config.kernel_count, groups = 1,
-                                   dilated_kernel_size = self.config.max_delay,
-                                   bias=self.config.bias,
-                                   dense_kernel_size=(3, 3), # no learnable positions in these 2 dims
-                                   padding=(1, 1, self.config.max_delay // 2),
-                                   version=self.config.DCLSversion)],
-
-                        [layer.Dropout(self.config.dropout_p, step_mode='m')],
-                        [layer.MaxPool2d(2, 2, step_mode='m')]]]
-
-        self.blocks[0][0].insert(1, layer.BatchNorm2d(self.config.n_hidden_neurons, step_mode='m'))
-        self.blocks[0][1].insert(0, neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                       surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
-                                                       step_mode='m', decay_input=False, store_v_seq = True))
+        ################################################
+        #  a DCLS_Block is made of : 
+        #    0: (DCLS_3_1d + batchnorm) | 
+        #    1: (lif+dropout+(synapseFilter)) , 
+        #    2: (pooling) |
 
 
-        ################################################   Hidden Layers    #######################################################
+        #####################  a. DCLS_Blocks   #########
+        
+        self.blocks = []
+        
+        for i in range(0,self.config.n_hidden_layers): # i =  0,1, 2, 3, 4
+            if i == 0:
+                in_channels = self.config.n_inputs
+            else:
+                in_channels = self.config.n_hidden_neurons
 
-        for i in range(1,self.config.n_hidden_layers): # i =  1, 2, 3, 4
-            self.block = [[Dcls3_1d(in_channels = self.config.n_hidden_neurons,  out_channels = self.config.n_hidden_neurons,
-                                   kernel_count=self.config.kernel_count, groups = 1,
-                                   dilated_kernel_size = self.config.max_delay,
-                                   bias=self.config.bias,
-                                   dense_kernel_size=(3, 3), # no learnable positions in these 2 dims
-                                   padding=(1, 1, self.config.max_delay // 2),
-                                   version=self.config.DCLSversion)],
+            self.block = [[Dcls3_1d_SJ(in_channels = in_channels, 
+                                    out_channels = self.config.n_hidden_neurons,
+                                    kernel_count=self.config.kernel_count, 
+                                    groups = 1,
+                                    learn_delay = self.config.learn_delay,
+                                    dilated_kernel_size = self.config.max_delay,
+                                    spatial_padding = (1,1),
+                                    stride = (1,1),
+                                    dense_kernel_size=(3,3), 
+                                    bias=self.config.bias,
+                                    version=self.config.DCLSversion),
+                            layer.BatchNorm2d(self.config.n_hidden_neurons, step_mode='m')],
 
-                            [layer.Dropout(self.config.dropout_p, step_mode='m')],
-                            [layer.MaxPool2d(2, 2, step_mode='m')]]
+                            [neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
+                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        step_mode='m'),
+                            layer.Dropout(self.config.dropout_p, step_mode='m'),]
+                        ]
 
-            self.block[0].insert(1, layer.BatchNorm2d(self.config.n_hidden_neurons, step_mode='m'))
-            self.block[1].insert(0, neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                       surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
-                                                       step_mode='m', decay_input=False, store_v_seq = True))
+            if self.config.use_maxpool:
+                self.block.append([layer.MaxPool2d(2, 2, step_mode='m')])
 
             self.blocks.append(self.block)
 
         
 
-        ################################################   Final Layer    #######################################################
+        ############  b. Final BLOCK (Fully conected)   #########################
 
-        
-        final_width = self.config.width//(2**self.config.n_hidden_layers) # the width of the last layer (<128 because of the pooling)
-        dim_flatten = self.config.n_hidden_neurons * final_width * final_width # the dimension to flatten (channels, height, width) to 
+        final_width = self.config.width//(2**self.config.n_hidden_layers) # the width of the last image (<128 because of the max pooling)
+        dim_flatten = self.config.n_hidden_neurons * final_width * final_width # the dimension after flattening the last imge from (time,batch_size,channels, height, width) to (time, batch_size, *)
 
-        print(dim_flatten)
+        self.final_block  = [
+            [layer.Flatten(step_mode='m')],
 
-        self.final_block  = nn.Sequential(
-            layer.Flatten(step_mode='m'),
-            layer.Dropout(0.5, step_mode='m'),
+            [layer.Dropout(0.5, step_mode='m'),
             layer.Linear(dim_flatten, 512, step_mode='m'),
-            neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                       surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
-                                                       step_mode='m', decay_input=False, store_v_seq = True),
+            neuron.LIFNode(tau=self.config.init_tau, 
+                            v_threshold=self.config.v_threshold,
+                            surrogate_function=self.config.surrogate_function, 
+                            detach_reset=self.config.detach_reset,
+                            step_mode='m')],
 
-            layer.Dropout(0.5,step_mode='m'),
+            [layer.Dropout(0.5,step_mode='m'),
             layer.Linear(512, 110,step_mode='m'),
-            neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                       surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
-                                                       step_mode='m', decay_input=False, store_v_seq = True)
-        )
+            neuron.LIFNode(tau=self.config.init_tau, 
+                            v_threshold=self.config.v_threshold,
+                            surrogate_function=self.config.surrogate_function, 
+                            detach_reset=self.config.detach_reset,
+                            step_mode='m')]
+            ]
+        
+
+        ############  c. Voting Layer  #####################
         self.voting_layer = layer.VotingLayer(10, step_mode = 'm')
 
-        self.model = [l for block in self.blocks for sub_block in block for l in sub_block] + [self.final_block] + [self.voting_layer]
+
+        ############ Adding all up  #########################
+        self.model = [l for block in self.blocks for sub_block in block for l in sub_block] + [l for sub_block in self.final_block for l in sub_block] + [self.voting_layer]
         self.model = nn.Sequential(*self.model)
         print(self.model)
 
         self.positions = []
         self.weights = []
         self.weights_bn = []
-        self.weights_plif = []
 
+
+        # handle parameters asignments
         for m in self.model.modules():
-            if isinstance(m, Dcls3_1d):
+            if isinstance(m, Dcls3_1d_SJ):
                 self.positions.append(m.P)
                 self.weights.append(m.weight)
                 if self.config.bias:
                     self.weights_bn.append(m.bias)
             elif isinstance(m, layer.Linear):
                 self.weights.append(m.weight)
+                self.weights.append(m.bias)
             elif isinstance(m, layer.BatchNorm2d):
                 self.weights_bn.append(m.weight)
                 self.weights_bn.append(m.bias)
-            elif isinstance(m, neuron.ParametricLIFNode):
-                self.weights_plif.append(m.w)
+            #elif isinstance(m, layer.VotingLayer):
+                # self.weights.append(m.weight) VotingLayer has no learnable weights
+                # self.weights_bn.append(m.bias)
 
+        self.init_model()
 
     def init_model(self):
         self.mask = []
+
+        if self.config.init_w_method == 'kaiming_uniform':
+            for i in range(self.config.n_hidden_layers):
+                # can you replace with self.weights ?
+                torch.nn.init.kaiming_uniform_(self.blocks[i][0][0].weight, nonlinearity='relu')
 
         for i in range(self.config.n_hidden_layers):
                 # can you replace with self.positions?
                 torch.nn.init.uniform_(self.blocks[i][0][0].P, a = self.config.init_pos_a, b = self.config.init_pos_b)
                 self.blocks[i][0][0].clamp_parameters()
 
-
-        for i in range(self.config.n_hidden_layers):
-            # can you replace with self.positions?
-            torch.nn.init.constant_(self.blocks[i][0][0].SIG, self.config.sigInit)
-            self.blocks[i][0][0].SIG.requires_grad = False
-
-
-
-
     def reset_model(self, train=True):
         functional.reset_net(self)
-
-        for i in range(self.config.n_hidden_layers):
-            if self.config.sparsity_p > 0:
-                with torch.no_grad():
-                    self.mask[i] = self.mask[i].to(self.blocks[i][0][0].weight.device)
-                    #self.blocks[i][0][0].weight = torch.nn.Parameter(self.blocks[i][0][0].weight * self.mask[i])
-                    self.blocks[i][0][0].weight *= self.mask[i]
-
-        # We use clamp_parameters of the Dcls1d modules
-        if train:
+        if train: 
             for block in self.blocks:
                 block[0][0].clamp_parameters()
 
-
-
-
-    def decrease_sig(self, epoch):
-
-        # Decreasing to 0.23 instead of 0.5
-
-        alpha = 0
-        sig = self.blocks[-1][0][0].SIG[0,0,0,0].mean((0,1)).detach().cpu().item()
-        if self.config.decrease_sig_method == 'exp':
-            if epoch < self.config.final_epoch and sig > 0.23:
-                alpha = (0.23/self.config.sigInit)**(1/(self.config.final_epoch))
-
-                for block in self.blocks:
-                    block[0][0].SIG *= alpha
-                    # No need to clamp after modifying sigma
-                    #block[0][0].clamp_parameters()
-
+    def decrease_sig(self, epoch, epochs):
+        for i in range(self.config.n_hidden_layers):
+            self.blocks[i][0][0].decrease_sig(epoch,epochs)
 
     def forward(self, x):
 
         for block_id in range(self.config.n_hidden_layers):
-            # x is permuted: (time, batch, c,x,y) => (batch,  c,x,y, time)  in order to be processed by the convolution
-            x = x.permute(1,2,3,4,0)
-            x = F.pad(x, (self.config.left_padding, self.config.right_padding), 'constant', 0)  # we use padding for the delays kernel
-
-            # we use convolution of delay kernels
+            # feed DCLS
             x = self.blocks[block_id][0][0](x)
-            # We permute again: (batch,  c,x,y, time) => (time, batch,  c,x,y) in order to be processed by batchnorm or Lif
-            x = x.permute(4,0,1,2,3)
-
-            x = self.blocks[block_id][0][1](x)
-            # we use our spiking neuron filter
-            spikes = self.blocks[block_id][1][0](x)
-            # we use dropout on generated spikes tensor
-            x = self.blocks[block_id][1][1](spikes)
             
-            #Pooling
-            x = self.blocks[block_id][2][0](x)
+            # # feed (BatchNorm)
+            x = self.blocks[block_id][0][1](x)
+
+            # Feed the dropout layer
+            x = self.blocks[block_id][1][0](x)
+
+            # Feed the LIF
+            x = self.blocks[block_id][1][1](x)
+            
+            # Feed the Pooling
+            if self.config.use_maxpool:
+                x = self.blocks[block_id][2][0](x)
 
             # x is back to shape (time, batch, neurons)
 
-        # Finally, we apply same transforms for the output layer
-        #   (time, batch, neurons) => (batch, neurons, time)
-        x = x.permute(1,2,3,4,0)
-        x = F.pad(x, (self.config.left_padding, self.config.right_padding), 'constant', 0)
-        
-        # permute : (batch, neurons, time) => (time, batch, neurons)  For final spiking neuron filter
-        x = x.permute(4,0,1,2,3)
-        # Apply final layer
-        x = self.final_block(x)
-        x = self.voting_layer(x)
-        return x
+        # Flatten
+        x = self.final_block[0][0](x)
+
+        # 1st Linear layer
+        x = self.final_block[1][0](x) #drop out
+        x = self.final_block[1][1](x) #linear
+        x = self.final_block[1][2](x) #neuron
+
+        # 2nd Linear layer  
+        x = self.final_block[2][0](x) #drop out
+        x = self.final_block[2][1](x) #linear
+        x = self.final_block[2][2](x) #neuron
+
+        output  = self.voting_layer(x)
+
+        return output
 
 
     def round_pos(self):

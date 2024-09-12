@@ -17,10 +17,10 @@ working_dir
 
 run tutorial (dvs gesture no delays) from https://github.com/fangwei123456/spikingjelly/blob/0.0.0.0.14/spikingjelly/activation_based/examples/classify_dvsg.py: 
 ```
-python3 main_snn_no_delays.py -T 16 -device cuda:0 -b 8 -epochs 64 -data-dir DVS128Gesture -amp -cupy -opt adam -lr 0.001 -j 8
+python3 main.py -n-delays.py
 ```
 
 run dvs gesture with learnable delays (https://github.com/Thvnvtos/SNN-delays/blob/master/snn_delays.py adapted to DVS Gesture): (change config.py if needed for parameters and hyperparameters)
 ```
-python3 main_snn_delays.py
+python3 main.py
 ```
