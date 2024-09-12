@@ -15,6 +15,23 @@ import argparse
 from tqdm import tqdm
 import datetime
 
+def set_seed(seed):
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
+    # This flag only allows cudnn algorithms that are determinestic unlike .benchmark
+    torch.backends.cudnn.deterministic = True
+
+    #this flag enables cudnn for some operations such as conv layers and RNNs, 
+    # which can yield a significant speedup.
+    torch.backends.cudnn.enabled = False
+
+    # This flag enables the cudnn auto-tuner that finds the best algorithm to use
+    # for a particular configuration. (this mode is good whenever input sizes do not vary)
+    torch.backends.cudnn.benchmark = False
+
+
 def main():
     # python3 main.py -no-delays 
     # python3 main.py -T 16 
@@ -35,10 +52,12 @@ def main():
     # Model initialization 
     if args.no_delays:
         config = config_snn_no_delays
+        set_seed(config.seed)
         model = snn_no_delays.Net(config = config)
         optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay)]
     else:
         config = config_snn_delays
+        set_seed(config.seed)
         model = snn_delays.Net(config=config)
         optimizers = [optim.Adam([{'params':model.weights, 'lr':model.config.lr_w, 'weight_decay':model.config.weight_decay},
                                                      {'params':model.weights_bn, 'lr':model.config.lr_w, 'weight_decay':0}]),
@@ -53,6 +72,7 @@ def main():
 
     print(model)
 
+    
 
     # Printing Model Size
     size_model = 0
@@ -119,7 +139,7 @@ def main():
 
 
     ######################## Training loop ##########################
-
+    
     for epoch in range(start_epoch, args.epochs):
         start_time = time.time()
         model.train()
