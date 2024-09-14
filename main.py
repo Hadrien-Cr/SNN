@@ -85,7 +85,7 @@ def main():
         config = load_config('config_snn_no_delays.yaml')
         set_seed(config.seed)
         model = models.Net_No_Delays(config = config)
-        optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay, foreach=False)]
+        optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay)]
 
     else:
         # With delays
