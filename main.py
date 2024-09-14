@@ -1,19 +1,41 @@
 import torch
 import sys
 import torch.nn.functional as F
+from torch import optim
 from torch.cuda import amp
 from spikingjelly.activation_based import functional, surrogate, neuron
-import snn_no_delays, snn_delays
 from spikingjelly.datasets.dvs128_gesture import DVS128Gesture
+import models
+
 from torch.utils.tensorboard import SummaryWriter
-import time
-import os
-from config_snn_delays import config_snn_delays
-from config_snn_no_delays import config_snn_no_delays
-from torch import optim
-import argparse
+import time,os,argparse,datetime,yaml
 from tqdm import tqdm
-import datetime
+
+def  print_model_size(model):   # Printing Model Size
+    size_model = 0
+    for param in model.parameters():
+        if param.data.is_floating_point():
+            size_model += param.numel() * torch.finfo(param.data.dtype).bits
+        else:
+            size_model += param.numel() * torch.iinfo(param.data.dtype).bits
+    print(f"model size: {size_model} / bit | {size_model / 8e6:.2f} / MB")
+    
+    
+def load_config(filename):
+    """
+    Load the configuration from a YAML file and return a Config object.
+    """
+    class Config:
+        def __init__(self, config_dict):
+            self.__dict__.update(config_dict)
+
+    # Load the YAML file and convert to Python object
+    with open(filename, 'r') as file:
+        config_dict = yaml.safe_load(file)
+
+    config = Config(config_dict)
+
+    return(config)
 
 def set_seed(seed):
     torch.manual_seed(seed)
@@ -51,40 +73,35 @@ def main():
 
     # Model initialization 
     if args.no_delays:
-        config = config_snn_no_delays
+        # No delays
+        config = load_config('config_snn_no_delays.yaml')
         set_seed(config.seed)
-        model = snn_no_delays.Net(config = config)
+        model = models.Net_No_Delays(config = config)
         optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay)]
+        lr_schedulers = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs) for optimizer in optimizers]
+
     else:
-        config = config_snn_delays
+        # With delays
+        config = load_config('config_snn_with_delays.yaml')
         set_seed(config.seed)
-        model = snn_delays.Net(config=config)
+        model = models.Net_With_Delays(config=config)
         optimizers = [optim.Adam([{'params':model.weights, 'lr':model.config.lr_w, 'weight_decay':model.config.weight_decay},
                                                      {'params':model.weights_bn, 'lr':model.config.lr_w, 'weight_decay':0}]),
                     optim.Adam(model.positions, lr = model.config.lr_pos, weight_decay=0)]
 
 
-    lr_schedulers = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs) for optimizer in optimizers]
+        lr_schedulers = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs) for optimizer in optimizers]
+    
+    
     functional.set_step_mode(model, 'm')
 
     if args.cupy:
         functional.set_backend(model, 'cupy', instance=neuron.LIFNode)
 
     print(model)
-
-    
-
-    # Printing Model Size
-    size_model = 0
-    for param in model.parameters():
-        if param.data.is_floating_point():
-            size_model += param.numel() * torch.finfo(param.data.dtype).bits
-        else:
-            size_model += param.numel() * torch.iinfo(param.data.dtype).bits
-    print(f"model size: {size_model} / bit | {size_model / 8e6:.2f} / MB")
-        
+    print_model_size(model)
     model.to(args.device)
-
+    print("model runs on device:", args.device)
 
     # Data Loading
     train_set = DVS128Gesture(root=args.data_dir, train=True, data_type='frame', frames_number=config.time_step, split_by='number')
@@ -141,6 +158,11 @@ def main():
     ######################## Training loop ##########################
     
     for epoch in range(start_epoch, args.epochs):
+        if not args.no_delays:
+            model.collect_delays()
+            model.draw_delays_all_evolution()
+            model.draw_delays_all_evolution()
+
         start_time = time.time()
         model.train()
         train_loss = 0
@@ -194,6 +216,10 @@ def main():
         test_samples = 0
 
         with torch.no_grad():
+
+            if not args.no_delays:
+                model.round_pos()
+
             for frame, label in test_data_loader:
                 frame = frame.to(args.device)
                 frame = frame.transpose(0, 1)  # [N, T, C, H, W] -> [T, N, C, H, W]

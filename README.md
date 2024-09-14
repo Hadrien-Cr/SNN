@@ -1,6 +1,7 @@
 prepare dataset:
 -  go to the [download page](https://ibm.ent.box.com/s/3hiq58ww1pbbjrinh367ykfdf60xsfm8/folder/50167556794) of DVS Gesture and download all 4 files
 - place the file in your working directory following the arborescence
+
 ```
 working_dir
     .

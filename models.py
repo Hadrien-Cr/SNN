@@ -1,11 +1,60 @@
-
-from spikingjelly.activation_based import neuron, layer
+from spikingjelly.activation_based import neuron, layer, surrogate
 from spikingjelly.activation_based import functional
 from DCLS.construct.modules import  Dcls3_1d, Dcls1d
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+
+import matplotlib.pyplot as plt
+import numpy as np
+
+class Net_No_Delays(nn.Module):
+    def __init__(self, config):
+        super().__init__()
+
+        conv = []
+        for i in range(config.n_hidden_layers):
+            if conv.__len__() == 0:
+                in_channels = config.n_inputs
+            else:
+                in_channels = config.n_hidden_neurons
+
+            conv.append(layer.Conv2d(in_channels, config.n_hidden_neurons, kernel_size=3, padding=1, bias=False))
+            conv.append(layer.BatchNorm2d(config.n_hidden_neurons))
+            conv.append(neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
+                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        step_mode='m'))
+            conv.append(layer.Dropout(config.dropout_p))
+            conv.append(layer.MaxPool2d(2, 2))
+
+
+        self.conv_cat = nn.Sequential(*conv)
+        self.fc = nn.Sequential(
+            layer.Flatten(),
+            layer.Dropout(0.5),
+            layer.Linear(config.n_hidden_neurons * 4 * 4, 512),
+            neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
+                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        step_mode='m'),
+
+            layer.Dropout(0.5),
+            layer.Linear(512, 110),
+            neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
+                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        step_mode='m'),  
+        )
+        self.voting_layer = layer.VotingLayer(10)
+
+    def forward(self, x: torch.Tensor):
+        x = self.conv_cat(x)
+        x = self.fc(x)
+        x = self.voting_layer(x)
+        return x 
+    
+    def reset_model(self, train=True):
+        functional.reset_net(self)
+
 
 class Dcls3_1d_SJ(Dcls3_1d):
     def __init__(
@@ -39,8 +88,6 @@ class Dcls3_1d_SJ(Dcls3_1d):
 
         self.learn_delay = learn_delay
 
-        torch.nn.init.constant_(self.P, (self.dilated_kernel_size[0] // 2)-0.01)
-
         if not self.learn_delay:
             self.P.requires_grad = False
 
@@ -66,7 +113,7 @@ class Dcls3_1d_SJ(Dcls3_1d):
         return x
     
 
-class Net(nn.Module):
+class Net_With_Delays(nn.Module):
     def __init__(self, config):
         super().__init__()
         self.config = config
@@ -103,7 +150,8 @@ class Net(nn.Module):
                                     stride = (1,1),
                                     dense_kernel_size=(3,3), 
                                     bias=self.config.bias,
-                                    version=self.config.DCLSversion),
+                                    version=self.config.DCLSversion
+                                    ),
                             layer.BatchNorm2d(self.config.n_hidden_neurons, step_mode='m')],
 
                             [neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
@@ -161,25 +209,24 @@ class Net(nn.Module):
 
         # handle parameters asignments
         for m in self.model.modules():
+
             if isinstance(m, Dcls3_1d_SJ):
                 self.positions.append(m.P)
                 self.weights.append(m.weight)
                 if self.config.bias:
                     self.weights_bn.append(m.bias)
+
             elif isinstance(m, layer.Linear):
                 self.weights.append(m.weight)
                 self.weights.append(m.bias)
+
             elif isinstance(m, layer.BatchNorm2d):
                 self.weights_bn.append(m.weight)
                 self.weights_bn.append(m.bias)
-            #elif isinstance(m, layer.VotingLayer):
-                # self.weights.append(m.weight) VotingLayer has no learnable weights
-                # self.weights_bn.append(m.bias)
 
         self.init_model()
 
     def init_model(self):
-        self.mask = []
 
         if self.config.init_w_method == 'kaiming_uniform':
             for i in range(self.config.n_hidden_layers):
@@ -187,9 +234,19 @@ class Net(nn.Module):
                 torch.nn.init.kaiming_uniform_(self.blocks[i][0][0].weight, nonlinearity='relu')
 
         for i in range(self.config.n_hidden_layers):
-                # can you replace with self.positions?
+
+            if self.config.init_pos_method == 'right':
+                torch.nn.init.constant_(self.blocks[i][0][0].P, (self.config.max_delay[0] -1 -0.01))
+                self.blocks[i][0][0].clamp_parameters()
+
+            elif self.config.init_pos_method == 'middle':
+                torch.nn.init.constant_(self.blocks[i][0][0].P, (self.config.max_delay[0] // 2)-0.01)
+                self.blocks[i][0][0].clamp_parameters()
+
+            elif self.config.init_pos_method == 'uniform':
                 torch.nn.init.uniform_(self.blocks[i][0][0].P, a = self.config.init_pos_a, b = self.config.init_pos_b)
                 self.blocks[i][0][0].clamp_parameters()
+
 
     def reset_model(self, train=True):
         functional.reset_net(self)
@@ -245,3 +302,33 @@ class Net(nn.Module):
             for i in range(len(self.blocks)):
                 self.blocks[i][0][0].P.round_()
                 self.blocks[i][0][0].clamp_parameters()
+
+
+    def collect_delays(self):
+        delays = [ p.item() for p in self.positions]
+        max_delay = self.config.max_delay
+
+        values_per_bins = [0 for delay in range(max_delay)]
+
+        for delay in delays:
+            bin = round(delay)
+            values_per_bins[bin]+=1
+
+        self.delays_histogram.append(values_per_bins)
+        
+        first_delay = delays[0] 
+        values_per_bins_first_delay = [np.exp(-(delay-first_delay)**2/self.SIG) for delay in range(max_delay)]
+        self.delays_histogram_first_delay.append(values_per_bins_first_delay)
+
+
+    def draw_delays_all_evolution(self):
+        fig,ax = plt.subplots()
+        im = ax.imshow(self.delays_histogram)
+        fig.tight_layout()
+        plt.savefig('delays_all_evolution.png')
+
+    def draw_delays_single_evolution(self):
+        fig,ax = plt.subplots()
+        im = ax.imshow(self.delays_histogram_first_delay)
+        fig.tight_layout()
+        plt.savefig('delays_single_evolution.png')
