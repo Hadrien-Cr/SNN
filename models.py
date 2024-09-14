@@ -313,7 +313,7 @@ class Net_With_Delays(nn.Module):
 
         max_delay = self.config.max_delay
 
-        values_per_bins = [0 for delay in range(-max_delay//2, max_delay//2+1)]
+        values_per_bins = [0 for delay in range(-max_delay//2, max_delay//2+2)]
 
         for delay in delays:
             bin = round(delay.item())
@@ -322,7 +322,7 @@ class Net_With_Delays(nn.Module):
         self.delays_histogram.append(values_per_bins)
         
         first_delay = delays[0].item()
-        values_per_bins_first_delay = [np.exp(-(delay-first_delay)**2/(self.blocks[0][0][0].SIG if self.config.DCLSversion == "gauss" else 1e-7)) for delay in range(-max_delay//2, max_delay//2+1)]
+        values_per_bins_first_delay = [np.exp(-(delay-first_delay)**2/(self.blocks[0][0][0].SIG if self.config.DCLSversion == "gauss" else 1e-7)) for delay in range(-max_delay//2, max_delay//2+2)]
         self.delays_histogram_first_delay.append(values_per_bins_first_delay)
 
 
