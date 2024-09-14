@@ -165,16 +165,18 @@ def main():
     ######################## Training loop ##########################
     
     for epoch in range(start_epoch, args.epochs):
-        if not args.no_delays:
-            model.collect_delays()
-            model.draw_delays_all_evolution()
-            model.draw_delays_single_evolution()
+        #if not args.no_delays:
+            
+            #model.collect_delays()
+            #model.draw_delays_all_evolution()
+            #model.draw_delays_single_evolution()
 
         start_time = time.time()
         model.train()
         train_loss = 0
         train_acc = 0
         train_samples = 0
+        
         for frame, label in tqdm(train_data_loader):
             for optimizer in optimizers:
                 optimizer.zero_grad()

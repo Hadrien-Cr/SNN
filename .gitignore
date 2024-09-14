@@ -8,3 +8,6 @@ logs
 
 # ignore images
 *png
+
+# ignore zip
+*zip
