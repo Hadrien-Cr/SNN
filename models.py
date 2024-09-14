@@ -12,7 +12,7 @@ import numpy as np
 class Net_No_Delays(nn.Module):
     def __init__(self, config):
         super().__init__()
-
+        self.config = config
         conv = []
         for i in range(config.n_hidden_layers):
             if conv.__len__() == 0:
