@@ -317,7 +317,7 @@ class Net_With_Delays(nn.Module):
 
         for delay in delays:
             bin = round(delay.item())
-            values_per_bins[bin]+=1
+            values_per_bins[bin+max_delay//2]+=1
 
         self.delays_histogram.append(values_per_bins)
         
