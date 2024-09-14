@@ -86,7 +86,6 @@ def main():
         set_seed(config.seed)
         model = models.Net_No_Delays(config = config)
         optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay)]
-        lr_schedulers = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs) for optimizer in optimizers]
 
     else:
         # With delays
@@ -98,7 +97,7 @@ def main():
                     optim.Adam(model.positions, lr = model.config.lr_pos, weight_decay=0)]
 
 
-        lr_schedulers = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs) for optimizer in optimizers]
+    lr_schedulers = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs) for optimizer in optimizers]
     
     
     functional.set_step_mode(model, 'm')
@@ -169,7 +168,7 @@ def main():
         if not args.no_delays:
             model.collect_delays()
             model.draw_delays_all_evolution()
-            model.draw_delays_all_evolution()
+            model.draw_delays_single_evolution()
 
         start_time = time.time()
         model.train()
