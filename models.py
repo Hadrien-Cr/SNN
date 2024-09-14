@@ -23,7 +23,7 @@ class Net_No_Delays(nn.Module):
             conv.append(layer.Conv2d(in_channels, config.n_hidden_neurons, kernel_size=3, padding=1, bias=False))
             conv.append(layer.BatchNorm2d(config.n_hidden_neurons))
             conv.append(neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        surrogate_function=surrogate.ATan(), detach_reset=self.config.detach_reset,
                                                         step_mode='m'))
             conv.append(layer.Dropout(config.dropout_p))
             conv.append(layer.MaxPool2d(2, 2))
@@ -35,13 +35,13 @@ class Net_No_Delays(nn.Module):
             layer.Dropout(0.5),
             layer.Linear(config.n_hidden_neurons * 4 * 4, 512),
             neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        surrogate_function=surrogate.ATan(), detach_reset=self.config.detach_reset,
                                                         step_mode='m'),
 
             layer.Dropout(0.5),
             layer.Linear(512, 110),
             neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        surrogate_function=surrogate.ATan(), detach_reset=self.config.detach_reset,
                                                         step_mode='m'),  
         )
         self.voting_layer = layer.VotingLayer(10)
@@ -155,7 +155,7 @@ class Net_With_Delays(nn.Module):
                             layer.BatchNorm2d(self.config.n_hidden_neurons, step_mode='m')],
 
                             [neuron.LIFNode(tau=self.config.init_tau, v_threshold=self.config.v_threshold,
-                                                        surrogate_function=self.config.surrogate_function, detach_reset=self.config.detach_reset,
+                                                        surrogate_function=surrogate.ATan(), detach_reset=self.config.detach_reset,
                                                         step_mode='m'),
                             layer.Dropout(self.config.dropout_p, step_mode='m'),]
                         ]
@@ -179,7 +179,7 @@ class Net_With_Delays(nn.Module):
             layer.Linear(dim_flatten, 512, step_mode='m'),
             neuron.LIFNode(tau=self.config.init_tau, 
                             v_threshold=self.config.v_threshold,
-                            surrogate_function=self.config.surrogate_function, 
+                            surrogate_function=surrogate.ATan(), 
                             detach_reset=self.config.detach_reset,
                             step_mode='m')],
 
@@ -187,7 +187,7 @@ class Net_With_Delays(nn.Module):
             layer.Linear(512, 110,step_mode='m'),
             neuron.LIFNode(tau=self.config.init_tau, 
                             v_threshold=self.config.v_threshold,
-                            surrogate_function=self.config.surrogate_function, 
+                            surrogate_function=surrogate.ATan(), 
                             detach_reset=self.config.detach_reset,
                             step_mode='m')]
             ]
@@ -225,6 +225,9 @@ class Net_With_Delays(nn.Module):
                 self.weights_bn.append(m.bias)
 
         self.init_model()
+
+        self.delays_histogram = []
+        self.delays_histogram_first_delay = []
 
     def init_model(self):
 
@@ -305,19 +308,21 @@ class Net_With_Delays(nn.Module):
 
 
     def collect_delays(self):
-        delays = [ p.item() for p in self.positions]
+        with torch.no_grad():
+            delays = torch.concat([p.flatten() for p in self.positions]).flatten()
+
         max_delay = self.config.max_delay
 
         values_per_bins = [0 for delay in range(max_delay)]
 
         for delay in delays:
-            bin = round(delay)
+            bin = round(delay.item())
             values_per_bins[bin]+=1
 
         self.delays_histogram.append(values_per_bins)
         
-        first_delay = delays[0] 
-        values_per_bins_first_delay = [np.exp(-(delay-first_delay)**2/self.SIG) for delay in range(max_delay)]
+        first_delay = delays[0].item()
+        values_per_bins_first_delay = [np.exp(-(delay-first_delay)**2/(self.blocks[0][0][0].SIG if self.config.DCLSversion == "gauss" else 1e-7)) for delay in range(max_delay)]
         self.delays_histogram_first_delay.append(values_per_bins_first_delay)
 
 

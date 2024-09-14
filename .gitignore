@@ -5,3 +5,6 @@ logs
 
 # ignore the model files
 *.pt
+
+# ignore images
+*png

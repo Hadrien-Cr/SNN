@@ -47,7 +47,6 @@ output_v_threshold: 1e9  # Voltage threshold for output neurons (extremely high 
 
 v_threshold: 1.0  # Threshold for neuron voltage to trigger a spike
 alpha: 2.0  # Alpha value for the surrogate activation function
-surrogate_function: "ATan(alpha=2.0)"  # Surrogate function for spike gradient approximation
 
 init_w_method: 'kaiming_uniform'  # Initialization method for weights
 
