@@ -67,6 +67,7 @@ def main():
     # python3 main.py -T 16 
 
     parser = argparse.ArgumentParser(description='Classify DVS Gesture')
+    parser.add_argument('-config-file', type=str, default="", help='path to the config file')
     parser.add_argument('-no-delays', action='store_true')
     parser.add_argument('-device', default='cuda:0', help='device')
     parser.add_argument('-epochs', default=50, type=int, metavar='N',help='number of total epochs to run')
@@ -77,19 +78,27 @@ def main():
     parser.add_argument('-cupy', action='store_true', help='use cupy backend')
 
     args = parser.parse_args()
-
+    
 
     # Model initialization 
     if args.no_delays:
         # No delays
-        config = load_config('config_snn_no_delays.yaml')
+        if args.config_file == "":
+            config = load_config("config_snn_no_delays.yaml")
+        else:
+            config = load_config(args.config_file)
+
         set_seed(config.seed)
         model = models.Net_No_Delays(config = config)
         optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay)]
 
     else:
         # With delays
-        config = load_config('config_snn_with_delays.yaml')
+        if args.config_file == "":
+            config = load_config("config_snn_with_delays.yaml") 
+        else:
+            config = load_config(args.config_file)
+
         set_seed(config.seed)
         model = models.Net_With_Delays(config=config)
         optimizers = [optim.Adam([{'params':model.weights, 'lr':model.config.lr_w, 'weight_decay':model.config.weight_decay},
