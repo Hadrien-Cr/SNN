@@ -165,11 +165,11 @@ def main():
     ######################## Training loop ##########################
     
     for epoch in range(start_epoch, args.epochs):
-        #if not args.no_delays:
+        if not args.no_delays:
             
-            #model.collect_delays()
-            #model.draw_delays_all_evolution()
-            #model.draw_delays_single_evolution()
+            model.collect_delays()
+            model.draw_delays_all_evolution()
+            model.draw_delays_single_evolution()
 
         start_time = time.time()
         model.train()
