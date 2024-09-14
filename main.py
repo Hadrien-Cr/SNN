@@ -85,7 +85,7 @@ def main():
         config = load_config('config_snn_no_delays.yaml')
         set_seed(config.seed)
         model = models.Net_No_Delays(config = config)
-        optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay)]
+        optimizers = [torch.optim.Adam(model.parameters(), lr=config.lr_w, weight_decay=config.weight_decay, foreach=False)]
 
     else:
         # With delays
@@ -93,8 +93,8 @@ def main():
         set_seed(config.seed)
         model = models.Net_With_Delays(config=config)
         optimizers = [optim.Adam([{'params':model.weights, 'lr':model.config.lr_w, 'weight_decay':model.config.weight_decay},
-                                                     {'params':model.weights_bn, 'lr':model.config.lr_w, 'weight_decay':0}]),
-                    optim.Adam(model.positions, lr = model.config.lr_pos, weight_decay=0)]
+                                                     {'params':model.weights_bn, 'lr':model.config.lr_w, 'weight_decay':0}], foreach=False),
+                    optim.Adam(model.positions, lr = model.config.lr_pos, weight_decay=0, foreach=False)]
 
 
     lr_schedulers = [torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, args.epochs) for optimizer in optimizers]
