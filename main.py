@@ -11,6 +11,7 @@ from torch.utils.tensorboard import SummaryWriter
 import time,os,argparse,datetime,yaml
 from tqdm import tqdm
 
+
 def  print_model_size(model):   # Printing Model Size
     size_model = 0
     for param in model.parameters():
@@ -20,22 +21,29 @@ def  print_model_size(model):   # Printing Model Size
             size_model += param.numel() * torch.iinfo(param.data.dtype).bits
     print(f"model size: {size_model} / bit | {size_model / 8e6:.2f} / MB")
     
-    
+
 def load_config(filename):
     """
     Load the configuration from a YAML file and return a Config object.
+    The function works even if the script is run from a different directory.
     """
     class Config:
         def __init__(self, config_dict):
             self.__dict__.update(config_dict)
 
+    # Get the absolute directory of the current script (main.py)
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+    
+    # Create the full path to the config file relative to the script directory
+    config_path = os.path.join(script_dir, filename)
+
     # Load the YAML file and convert to Python object
-    with open(filename, 'r') as file:
+    with open(config_path, 'r') as file:
         config_dict = yaml.safe_load(file)
 
     config = Config(config_dict)
 
-    return(config)
+    return config
 
 def set_seed(seed):
     torch.manual_seed(seed)
