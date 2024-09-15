@@ -321,9 +321,9 @@ class Net_With_Delays(nn.Module):
 
         self.delays_histogram.append(values_per_bins)
         
-        first_delay = delays[0].item()
-        values_per_bins_first_delay = [np.exp(-(delay-first_delay)**2/(self.blocks[0][0][0].SIG.item() if self.config.DCLSversion == "gauss" else 1e-7)) for delay in range(-(max_delay//2), max_delay//2+1)]
-        self.delays_histogram_first_delay.append(values_per_bins_first_delay)
+        # first_delay = delays[0].item()
+        # values_per_bins_first_delay = [np.exp(-(delay-first_delay)**2/(self.blocks[0][0][0].SIG.item() if self.config.DCLSversion == "gauss" else 1e-7)) for delay in range(-(max_delay//2), max_delay//2+1)]
+        # self.delays_histogram_first_delay.append(values_per_bins_first_delay)
 
 
     def draw_delays_all_evolution(self):
@@ -333,7 +333,8 @@ class Net_With_Delays(nn.Module):
         plt.savefig('delays_all_evolution.png')
 
     def draw_delays_single_evolution(self):
-        fig,ax = plt.subplots()
-        im = ax.imshow(self.delays_histogram_first_delay)
-        fig.tight_layout()
-        plt.savefig('delays_single_evolution.png')
+        # fig,ax = plt.subplots()
+        # im = ax.imshow(self.delays_histogram_first_delay)
+        # fig.tight_layout()
+        # plt.savefig('delays_single_evolution.png')
+        pass
