@@ -2,18 +2,18 @@
 #                    Delays                    #
 ################################################
 
-DCLSversion: 'v1'  
+DCLSversion: 'gauss'  
 
-learn_delay: true  # Whether to enable learning of delays in the model
+learn_delay: false  # Whether to enable learning of delays in the model
 
-max_delay: 5  # Maximum delay in time steps, adjusted to ensure it's odd
+max_delay: 11  # Maximum delay in time steps, adjusted to ensure it's odd
 
 # Initialization of positional delay parameters
 #init_pos_method: 'middle' 
 #init_pos_method: 'right' 
 init_pos_method: 'uniform'  # Method to initialize delay positions 
-init_pos_a: -2 # Lower bound for uniform distribution of positions
-init_pos_b: 2  # Upper bound for uniform distribution of positions
+init_pos_a: -5 # Lower bound for uniform distribution of positions
+init_pos_b: 5  # Upper bound for uniform distribution of positions
 
 decrease_sig_method: 'exp' 
 kernel_count: 1  
