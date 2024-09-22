@@ -36,4 +36,4 @@ init_w_method: 'kaiming_uniform'  # Initialization method for weights
 
 lr_w: 0.001  # Learning rate for weight parameters
 weight_decay: 0.00001  # Weight decay (L2 regularization)
-dropout_p: 0.25  # Dropout probability for regularization
+dropout_p: 0 # Dropout probability for regularization

@@ -2,18 +2,18 @@
 #                    Delays                    #
 ################################################
 
-DCLSversion: 'gauss'  
+DCLSversion: 'v1'  
 
 learn_delay: false  # Whether to enable learning of delays in the model
 
-max_delay: 11  # Maximum delay in time steps, adjusted to ensure it's odd
+max_delay: 5  # Maximum delay in time steps, adjusted to ensure it's odd
 
 # Initialization of positional delay parameters
 #init_pos_method: 'middle' 
 #init_pos_method: 'right' 
 init_pos_method: 'uniform'  # Method to initialize delay positions 
-init_pos_a: -5 # Lower bound for uniform distribution of positions
-init_pos_b: 5  # Upper bound for uniform distribution of positions
+init_pos_a: -2 # Lower bound for uniform distribution of positions
+init_pos_b: 2 # Upper bound for uniform distribution of positions
 
 decrease_sig_method: 'exp' 
 kernel_count: 1  
@@ -57,5 +57,5 @@ init_w_method: 'kaiming_uniform'  # Initialization method for weights
 lr_w: 0.001  # Learning rate for weight parameters
 lr_pos: 0.1  # Learning rate for pos
 weight_decay: 0.00001  # Weight decay (L2 regularization)
-dropout_p: 0.25  # Dropout probability for regularization
+dropout_p: 0 # Dropout probability for regularization
 

@@ -239,7 +239,7 @@ class Net_With_Delays(nn.Module):
         for i in range(self.config.n_hidden_layers):
 
             if self.config.init_pos_method == 'right':
-                torch.nn.init.constant_(self.blocks[i][0][0].P, (self.config.max_delay // 2))
+                torch.nn.init.constant_(self.blocks[i][0][0].P, (self.config.max_delay // 2) - 0.01)
                 self.blocks[i][0][0].clamp_parameters()
 
             elif self.config.init_pos_method == 'middle':
