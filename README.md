@@ -25,3 +25,18 @@ run dvs gesture with learnable delays (https://github.com/Thvnvtos/SNN-delays/bl
 ```
 python3 main.py
 ```
+
+
+# Results 
+
+
+| Configuration                                 | Max Acc | Remarks                                                        |
+|-----------------------------------------------|---------|----------------------------------------------------------------|
+| **no-delays**                                 | 0.94    | Train Acc goes up to 0.99                                       |
+| **sanity-check**                               | 0.94    | Same as no-delays                                               |
+| **random-delays-not-learnable**               | 0.77    |                                                                |
+| **v1-learnable-delays-init-right**            | 0.94    | The repartition of delays doesn't change over time              |
+| **gauss-learnable-delays-init-right**         | 0.76    | The delays get spread over time                                |
+| **gauss-learnable-delays-init-random**        | 0.73    | The delays shift over time but don't accumulate on either bound |
+| **gauss-learnable-delays-init-right-maxdelay11** | 0.77    | Not much difference with maxdelay5                              |
+| **gauss-learnable-delays-init-right-maxdelay5**  | 0.74    | Not much difference with maxdelay5                              |

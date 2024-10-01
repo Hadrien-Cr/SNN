@@ -4,7 +4,7 @@
 
 DCLSversion: 'v1'  
 
-learn_delay: false  # Whether to enable learning of delays in the model
+learn_delay: true  # Whether to enable learning of delays in the model
 
 max_delay: 5  # Maximum delay in time steps, adjusted to ensure it's odd
 
