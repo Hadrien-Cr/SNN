@@ -11,7 +11,7 @@ max_delay: 5  # Maximum delay in time steps, adjusted to ensure it's odd
 # Initialization of positional delay parameters
 #init_pos_method: 'middle' 
 #init_pos_method: 'right' 
-init_pos_method: 'uniform'  # Method to initialize delay positions 
+init_pos_method: 'right'  # Method to initialize delay positions 
 init_pos_a: -2 # Lower bound for uniform distribution of positions
 init_pos_b: 2 # Upper bound for uniform distribution of positions
 

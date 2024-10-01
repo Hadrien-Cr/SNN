@@ -27,16 +27,17 @@ python3 main.py
 ```
 
 
-# Results 
 
+# Results
 
-| Configuration                                 | Max Acc | Remarks                                                        |
-|-----------------------------------------------|---------|----------------------------------------------------------------|
-| **no-delays**                                 | 0.94    | Train Acc goes up to 0.99                                       |
-| **sanity-check**                               | 0.94    | Same as no-delays                                               |
-| **random-delays-not-learnable**               | 0.77    |                                                                |
-| **v1-learnable-delays-init-right**            | 0.94    | The repartition of delays doesn't change over time              |
-| **gauss-learnable-delays-init-right**         | 0.76    | The delays get spread over time                                |
-| **gauss-learnable-delays-init-random**        | 0.73    | The delays shift over time but don't accumulate on either bound |
-| **gauss-learnable-delays-init-right-maxdelay11** | 0.77    | Not much difference with maxdelay5                              |
-| **gauss-learnable-delays-init-right-maxdelay5**  | 0.74    | Not much difference with maxdelay5                              |
+| **Configuration**                                 | **Max Acc** | **Remarks**                                                        |
+|---------------------------------------------------|-------------|--------------------------------------------------------------------|
+| **no-delays**                                     | 0.955       | Train accuracy goes up to 0.99                                     |
+| **sanity-check**                                  | 0.948       | Same as no-delays                                                  |
+| **random-delays-not-learnable**                   | 0.770       |                                                                    |
+| **v1-learnable-delays-init-right**                | 0.934       | The repartition of delays does not change over time                |
+| **v1-learnable-delays-init-random**               | 0.799       | A clear shift in delay distribution over time                      |
+| **gauss-learnable-delays-init-right-maxdelay11**  | 0.798       | No significant difference compared to `maxdelay5`                  |
+| **gauss-learnable-delays-init-right-maxdelay5**   | 0.792       | No significant difference compared to `maxdelay11`                 |
+| **gauss-learnable-delays-init-random-maxdelay11** | 0.760       | Delays shift, but do not accumulate on bounds                      |
+| **gauss-learnable-delays-init-random-maxdelay5**  | 0.764       | Similar to `maxdelay11`, with delay distribution shifting          |
